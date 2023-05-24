@@ -43,18 +43,18 @@ namespace API.Data
 
         public async Task<IEnumerable<MessageDto>> GetMessageThread(string currentUserName, string recipientUserName)
         {
-            var messages = await _context.Messages
-                .Include(x => x.Sender).ThenInclude(x => x.Photos)
-                .Include(x => x.Recipient).ThenInclude(x => x.Photos)
+            var query = _context.Messages
                 .Where(
                     m =>
                         (m.RecipientUserName == currentUserName && m.SenderUserName == recipientUserName && !m.RecipientDeleted) ||
                         (m.RecipientUserName == recipientUserName && m.SenderUserName == currentUserName && !m.SenderDeleted)
                 )
                 .OrderBy(m => m.MessageSent)
-                .ToListAsync();
+                .AsQueryable();
 
-            var unreadMessages = messages.Where(x => x.DateRead == null && x.RecipientUserName == currentUserName).ToList();
+            var unreadMessages = query
+                    .Where(x => x.DateRead == null && x.RecipientUserName == currentUserName)
+                    .ToList();
 
             if (unreadMessages.Any())
             {
@@ -62,16 +62,9 @@ namespace API.Data
                 {
                     message.DateRead = DateTime.UtcNow;
                 }
-
-                await _context.SaveChangesAsync();
             }
 
-            return _mapper.Map<IEnumerable<MessageDto>>(messages);
-        }
-
-        public async Task<bool> SaveAllAsync()
-        {
-            return await _context.SaveChangesAsync() > 0;
+            return await query.ProjectTo<MessageDto>(_mapper.ConfigurationProvider).ToListAsync();
         }
 
         public void AddMessage(Message message)
